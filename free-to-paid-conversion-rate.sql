@@ -1,3 +1,12 @@
+-- ============================================================================
+-- Free-to-paid conversion KPIs (MySQL 8)
+-- Population: students who watched at least one lecture.
+-- Output (one row):
+--   conversion_rate             -> 11.29 %
+--   avg_reg_to_engage_days      ->  3.42 days
+--   avg_engage_to_purchase_days -> 26.25 days
+-- See conversion-deep-dive.sql for distributions and cohort cuts.
+-- ============================================================================
 USE db_course_conversions;
 
 -- CTE: Get the first watched date per student
@@ -38,18 +47,19 @@ ResultSet AS (
     FROM student_info si
     INNER JOIN FirstWatched fw ON si.student_id = fw.student_id
     LEFT JOIN FirstPurchased fp ON si.student_id = fp.student_id
-    WHERE fw.first_date_watched IS NOT NULL
-      AND (fp.first_date_purchased IS NULL OR fw.first_date_watched <= fp.first_date_purchased)
+    -- Exclude students who bought before ever watching: they did not convert *from* free engagement
+    WHERE fp.first_date_purchased IS NULL
+       OR fw.first_date_watched <= fp.first_date_purchased
 )
 
 -- Final select: Calculate all three KPIs in one row
 SELECT
     -- Conversion rate: percentage of students who purchased after watching
-    round((COUNT(CASE WHEN first_date_purchased IS NOT NULL THEN 1 END) * 100.0) / COUNT(*),2) AS conversion_rate,
+    ROUND((COUNT(CASE WHEN first_date_purchased IS NOT NULL THEN 1 END) * 100.0) / COUNT(*),2) AS conversion_rate,
 
     -- Average number of days from registration to first engagement
-    round(AVG(date_diff_reg_watch),2) AS avg_reg_to_engage_days,
+    ROUND(AVG(date_diff_reg_watch),2) AS avg_reg_to_engage_days,
 
     -- Average number of days from engagement to purchase
-    round(AVG(date_diff_watch_purch),2) AS avg_engage_to_purchase_days
+    ROUND(AVG(date_diff_watch_purch),2) AS avg_engage_to_purchase_days
 FROM ResultSet;
